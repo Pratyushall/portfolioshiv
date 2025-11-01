@@ -14,12 +14,12 @@ export default function MusicPlayer({
   const [isMuted, setIsMuted] = useState(false);
 
   // draggable state
-  const [pos, setPos] = useState({ x: 0, y: 70 }); // default near top
+  const [pos, setPos] = useState({ x: 0, y: 70 }); // default spot
   const draggingRef = useRef(false);
   const offsetRef = useRef({ x: 0, y: 0 });
 
   // your mp3 file
-  const src = "/audio/pranav-theme.mp3"; // 👈 change to your actual mp3
+  const src = "/audio/pranav-theme.mp3"; // change this to your file
 
   // autoplay / loop
   useEffect(() => {
@@ -31,19 +31,40 @@ export default function MusicPlayer({
       audioRef.current
         .play()
         .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false)); // autoplay blocked
+        .catch(() => setIsPlaying(false));
     }
   }, [audioRef, src]);
 
-  // global mouse handlers for drag
+  // global mouse + touch handlers for drag
   useEffect(() => {
-    const handleMove = (e: MouseEvent) => {
+    const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!draggingRef.current) return;
-      const nextX = e.clientX - offsetRef.current.x;
-      const nextY = e.clientY - offsetRef.current.y;
+
+      let clientX: number;
+      let clientY: number;
+
+      if (e instanceof TouchEvent) {
+        const t = e.touches[0];
+        if (!t) return;
+        clientX = t.clientX;
+        clientY = t.clientY;
+      } else {
+        clientX = e.clientX;
+        clientY = e.clientY;
+      }
+
+      const nextX = clientX - offsetRef.current.x;
+      const nextY = clientY - offsetRef.current.y;
+
+      // clamp a bit so it doesn't go fully off-screen
+      const maxX =
+        (typeof window !== "undefined" ? window.innerWidth : 400) - 200;
+      const maxY =
+        (typeof window !== "undefined" ? window.innerHeight : 800) - 80;
+
       setPos({
-        x: Math.max(nextX, 0),
-        y: Math.max(nextY, 0),
+        x: Math.max(0, Math.min(nextX, maxX)),
+        y: Math.max(0, Math.min(nextY, maxY)),
       });
     };
 
@@ -53,17 +74,34 @@ export default function MusicPlayer({
 
     window.addEventListener("mousemove", handleMove);
     window.addEventListener("mouseup", handleUp);
+
+    window.addEventListener("touchmove", handleMove, { passive: false });
+    window.addEventListener("touchend", handleUp);
+
     return () => {
       window.removeEventListener("mousemove", handleMove);
       window.removeEventListener("mouseup", handleUp);
+
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("touchend", handleUp);
     };
   }, []);
 
-  const startDrag = (e: React.MouseEvent) => {
+  const startDragMouse = (e: React.MouseEvent) => {
     draggingRef.current = true;
     offsetRef.current = {
       x: e.clientX - pos.x,
       y: e.clientY - pos.y,
+    };
+  };
+
+  const startDragTouch = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (!t) return;
+    draggingRef.current = true;
+    offsetRef.current = {
+      x: t.clientX - pos.x,
+      y: t.clientY - pos.y,
     };
   };
 
@@ -89,21 +127,18 @@ export default function MusicPlayer({
 
   return (
     <div
-      className="fixed w-64 bg-white/80 backdrop-blur-md border border-white/40 rounded-xl shadow-lg p-3"
+      className="fixed bg-white/80 backdrop-blur-md border border-white/40 rounded-xl shadow-lg p-3 md:w-64 w-72"
       style={{ top: pos.y, left: pos.x, zIndex: 999 }}
     >
       {/* draggable header */}
       <div
-        className="flex items-center justify-between gap-2 cursor-move mb-2"
-        onMouseDown={startDrag}
+        className="flex items-center justify-between gap-2 cursor-move mb-2 touch-none"
+        onMouseDown={startDragMouse}
+        onTouchStart={startDragTouch}
       >
         <div>
-          <p className="text-xs font-semibold text-slate-800">
-            YouTube Music (mock)
-          </p>
-          <p className="text-[10px] text-slate-500 truncate">
-            pranav-theme.mp3
-          </p>
+          <p className="text-xs font-semibold text-slate-800">YT Music</p>
+          <p className="text-[10px] text-slate-500 truncate"></p>
         </div>
         <button
           onClick={onClose}
@@ -131,9 +166,7 @@ export default function MusicPlayer({
         </button>
       </div>
 
-      <p className="text-[10px] text-slate-400 mt-2">
-        plays until you pause / mute ✨
-      </p>
+      <p className="text-[10px] text-slate-400 mt-2"></p>
     </div>
   );
 }

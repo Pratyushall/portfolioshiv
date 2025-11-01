@@ -191,7 +191,7 @@ function DesktopBig({
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url('${bgImage}')` }}
       />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(254,254,254,0.15)_0%,rgba(34,43,60,0.18)_100%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(254,254,254,0.15)_0%,rgba(34,43,60,0.18)_100%)] backdrop-blur-md" />
 
       {/* draggable icons */}
       {deskFolders.map((folder) => {
