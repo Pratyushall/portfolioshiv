@@ -34,7 +34,6 @@ export default function HeroScreen({
           "radial-gradient(circle at top, #C63957 0%, #941e38 50%, #4f0f1f 100%)",
       }}
     >
-      {/* optional texture image */}
       <div className="absolute inset-0 pointer-events-none bg-[url('/hero-blur.jpg')] bg-cover bg-center opacity-10 mix-blend-overlay" />
 
       <div className="relative z-10 flex flex-col items-center gap-6 px-4">
@@ -46,7 +45,7 @@ export default function HeroScreen({
           I won’t stop you...
         </h2>
 
-        {/* SEARCH BAR WRAPPER */}
+        {/* SEARCH BAR */}
         <div className="relative w-[min(520px,90vw)]">
           <div
             className="bg-white/85 rounded-full flex items-center border shadow-sm px-4 py-2.5 gap-3"
@@ -62,7 +61,6 @@ export default function HeroScreen({
               className="flex-1 bg-transparent outline-none text-slate-900 placeholder:text-slate-400"
               onFocus={() => setIsFocused(true)}
               onBlur={() => {
-                // small delay so we can click suggestion
                 setTimeout(() => setIsFocused(false), 150);
               }}
               value={query}
@@ -79,7 +77,7 @@ export default function HeroScreen({
             </button>
           </div>
 
-          {/* SUGGESTIONS DROPDOWN WITH SCROLLBAR */}
+          {/* SUGGESTIONS DROPDOWN */}
           {(isFocused || query.length > 0) && (
             <div className="absolute left-0 right-0 mt-2 bg-white border border-[#39C6A8]/40 rounded-xl shadow-lg overflow-hidden">
               <div className="max-h-52 overflow-y-auto">
@@ -87,7 +85,12 @@ export default function HeroScreen({
                   <button
                     key={suggestion}
                     onClick={() => {
+                      // fill the input
+                      setQuery(suggestion);
+                      // open desktop
                       onSuggestionClick();
+                      // also trigger search logic
+                      onSearch();
                     }}
                     className="w-full text-left px-4 py-2 text-sm text-slate-800 hover:bg-[#C63957]/5 transition"
                   >
