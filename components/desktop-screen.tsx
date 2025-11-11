@@ -22,16 +22,16 @@ type DesktopScreenProps = {
   musicOpen: boolean;
   setMusicOpen: (v: boolean) => void;
   audioRef: React.RefObject<HTMLAudioElement | null>;
-  bgImage?: string; // not used now
+  bgImage?: string;
 };
 
 type DraggableFolder = Folder & {
   x: number;
   y: number;
   z?: number;
+  page?: number;
 };
 
-// === NEAT config (unchanged) ===
 const neatConfig: NeatConfig = {
   colors: [
     { color: "#09351D", enabled: true },
@@ -62,7 +62,6 @@ const neatConfig: NeatConfig = {
   yOffset: 914,
 };
 
-// === NEAT background wrapper ===
 function NeatBackground({ config }: { config: NeatConfig }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -77,7 +76,6 @@ function NeatBackground({ config }: { config: NeatConfig }) {
   );
 }
 
-// helpers
 const isTouchDevice = () =>
   typeof window !== "undefined" &&
   ("ontouchstart" in window || navigator.maxTouchPoints > 0);
@@ -101,44 +99,65 @@ export default function DesktopScreen({
   const [deskFolders, setDeskFolders] = useState<DraggableFolder[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
 
+  // workspace size (mobile can be wider than viewport)
+  const [canvasW, setCanvasW] = useState<number>(0);
+  const [canvasH, setCanvasH] = useState<number>(0);
+
   const draggingIdRef = useRef<string | null>(null);
   const offsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const isTouchRef = useRef(false);
 
-  // Scatter/messy positions on mount & on resize
+  // Scatter into pages so ALL icons are reachable (mobile scroll)
   useEffect(() => {
     isTouchRef.current = isTouchDevice();
 
     const scatter = () => {
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const margin = 24;
-      // smaller icons on mobile, so we can pack more
-      const stepX = w < 640 ? 88 : 128;
-      const stepY = w < 640 ? 98 : 148;
+      const mobile = w < 640;
 
+      const margin = mobile ? 16 : 24;
+      const stepX = mobile ? 84 : 128; // tighter grid on mobile
+      const stepY = mobile ? 92 : 148;
       const cols = Math.max(2, Math.floor((w - margin * 2) / stepX));
       const rows = Math.max(3, Math.floor((h - margin * 2) / stepY));
+      const capacity = Math.max(1, cols * rows);
+      const pages = Math.max(1, Math.ceil(FOLDERS.length / capacity));
 
       let i = 0;
       const mapped: DraggableFolder[] = FOLDERS.map((f) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols) % rows;
-        // jitter each icon to look “messy”
-        const jitterX = rand(-20, 20);
-        const jitterY = rand(-16, 16);
-        const x = margin + col * stepX + jitterX;
+        const page = Math.floor(i / capacity);
+        const localIndex = i % capacity;
+        const col = localIndex % cols;
+        const row = Math.floor(localIndex / cols);
+
+        const jitterX = rand(-16, 16);
+        const jitterY = rand(-14, 14);
+
+        const x =
+          page * (w - margin * 2) + // shift each page to the right
+          margin +
+          col * stepX +
+          jitterX;
+
         const y = margin + row * stepY + jitterY;
+
         i++;
         return {
           ...f,
-          x: f.x ?? x,
-          y: f.y ?? y,
-          z: rand(10, 40), // random z-index-ish layering (we’ll add to base)
+          x,
+          y,
+          page,
+          z: rand(10, 40),
         };
       });
 
       setDeskFolders(mapped);
+
+      // workspace size: allow horizontal paging on mobile, single page on desktop
+      const workspaceW = mobile ? pages * (w - margin * 2) + margin * 2 : w;
+      setCanvasW(workspaceW);
+      setCanvasH(h);
     };
 
     scatter();
@@ -149,63 +168,61 @@ export default function DesktopScreen({
 
   // Mouse drag
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const move = (e: MouseEvent) => {
       const id = draggingIdRef.current;
       if (!id || isTouchRef.current) return;
       setDeskFolders((prev) =>
-        prev.map((folder) =>
-          folder.id !== id
-            ? folder
-            : {
-                ...folder,
-                x: e.clientX - offsetRef.current.x,
-                y: e.clientY - offsetRef.current.y,
-              }
-        )
+        prev.map((folder) => {
+          if (folder.id !== id) return folder;
+          const nextX = e.clientX - offsetRef.current.x;
+          const nextY = e.clientY - offsetRef.current.y;
+          const clampedX = Math.min(Math.max(nextX, 0), canvasW - 80); // 80 ~ icon width
+          const clampedY = Math.min(Math.max(nextY, 0), canvasH - 80);
+          return { ...folder, x: clampedX, y: clampedY };
+        })
       );
     };
-    const handleMouseUp = () => (draggingIdRef.current = null);
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+    const up = () => (draggingIdRef.current = null);
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
     };
-  }, []);
+  }, [canvasW, canvasH]);
 
-  // Touch drag
+  // Touch drag (doesn't block scrolling unless dragging an icon)
   useEffect(() => {
-    const handleTouchMove = (e: TouchEvent) => {
+    const move = (e: TouchEvent) => {
       const id = draggingIdRef.current;
       if (!id) return;
       const t = e.touches[0];
+      // prevent scroll while actively dragging an icon
+      e.preventDefault();
       setDeskFolders((prev) =>
-        prev.map((folder) =>
-          folder.id !== id
-            ? folder
-            : {
-                ...folder,
-                x: t.clientX - offsetRef.current.x,
-                y: t.clientY - offsetRef.current.y,
-              }
-        )
+        prev.map((folder) => {
+          if (folder.id !== id) return folder;
+          const nextX = t.clientX - offsetRef.current.x;
+          const nextY = t.clientY - offsetRef.current.y;
+          const clampedX = Math.min(Math.max(nextX, 0), canvasW - 72);
+          const clampedY = Math.min(Math.max(nextY, 0), canvasH - 72);
+          return { ...folder, x: clampedX, y: clampedY };
+        })
       );
     };
     const end = () => (draggingIdRef.current = null);
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
+    window.addEventListener("touchmove", move, { passive: false });
     window.addEventListener("touchend", end);
     window.addEventListener("touchcancel", end);
     return () => {
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", end);
-      window.removeEventListener("touchcancel", end);
+      window.removeEventListener("touchmove", move as any);
+      window.removeEventListener("touchend", end as any);
+      window.removeEventListener("touchcancel", end as any);
     };
-  }, []);
+  }, [canvasW, canvasH]);
 
   const startDragging = (
-    e:
-      | React.MouseEvent<HTMLDivElement, MouseEvent>
-      | React.TouchEvent<HTMLDivElement>,
+    e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>,
     id: string
   ) => {
     draggingIdRef.current = id;
@@ -214,6 +231,8 @@ export default function DesktopScreen({
 
     if ("touches" in e) {
       const t = e.touches[0];
+      // only block scroll if we are starting a drag on an icon
+      e.preventDefault();
       offsetRef.current = { x: t.clientX - folder.x, y: t.clientY - folder.y };
     } else {
       offsetRef.current = {
@@ -224,81 +243,80 @@ export default function DesktopScreen({
   };
 
   return (
-    <div className="relative h-full w-full overflow-hidden select-none">
-      {/* NEAT 3D background */}
+    <div className="relative h-full w-full select-none">
+      {/* BG */}
       <NeatBackground config={neatConfig} />
 
-      {/* Desktop icons */}
-      {deskFolders.map((folder, idx) => {
-        const thumb = folder.icon ?? folder.images?.[0];
-        const isSelected = selectedFolderId === folder.id;
+      {/* Workspace: scrollable on mobile if it overflows */}
+      <div className="absolute inset-0 overflow-auto sm:overflow-visible">
+        <div
+          className="relative"
+          style={{ width: canvasW || "100%", height: canvasH || "100%" }}
+        >
+          {/* Icons */}
+          {deskFolders.map((folder) => {
+            const thumb = folder.icon ?? folder.images?.[0];
+            const isSelected = selectedFolderId === folder.id;
 
-        // responsive sizes (smaller on mobile):
-        // container: w-20 on mobile, w-28 on sm+, w-32 on md+
-        // icon:     w-14 h-14 mobile, w-16 h-16 sm, w-20 h-20 md
-        return (
-          <div
-            key={folder.id}
-            className="absolute w-20 sm:w-28 md:w-32"
-            style={{
-              top: folder.y,
-              left: folder.x,
-              zIndex: 20 + (folder.z ?? 0) + (isSelected ? 50 : 0),
-              WebkitTapHighlightColor: "transparent", // kill blue tap highlight
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              setSelectedFolderId(folder.id);
-            }}
-            onDoubleClick={() => {
-              setSelectedFolderId(folder.id);
-              onFolderClick(folder.id);
-            }}
-            onMouseDown={(e) => startDragging(e, folder.id)}
-            onTouchStart={(e) => {
-              e.preventDefault();
-              startDragging(e, folder.id);
-            }}
-          >
-            {/* icon wrapper */}
-            <div
-              className={[
-                "rounded-xl overflow-hidden border shadow-md transition cursor-move flex items-center justify-center backdrop-blur",
-                "w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20",
-                // Transparent selection: remove blue; add subtle glow + border
-                isSelected
-                  ? "bg-white/10 border-white/50 ring-2 ring-white/60 shadow-[0_0_22px_rgba(255,255,255,0.35)]"
-                  : "bg-white/15 border-white/20 hover:bg-white/25 hover:scale-105",
-              ].join(" ")}
-            >
-              {thumb ? (
-                <img
-                  src={thumb}
-                  alt={folder.title}
-                  className="w-full h-full object-cover pointer-events-none"
-                  draggable={false}
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center bg-slate-200/30 text-[11px] text-slate-200">
-                  📁
+            return (
+              <div
+                key={folder.id}
+                className="absolute w-20 sm:w-28 md:w-32"
+                style={{
+                  top: folder.y,
+                  left: folder.x,
+                  zIndex: 20 + (folder.z ?? 0) + (isSelected ? 50 : 0),
+                  WebkitTapHighlightColor: "transparent",
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedFolderId(folder.id);
+                }}
+                onDoubleClick={() => {
+                  setSelectedFolderId(folder.id);
+                  onFolderClick(folder.id);
+                }}
+                onMouseDown={(e) => startDragging(e, folder.id)}
+                onTouchStart={(e) => startDragging(e, folder.id)}
+              >
+                <div
+                  className={[
+                    "rounded-xl overflow-hidden border shadow-md transition cursor-move flex items-center justify-center backdrop-blur",
+                    "w-14 h-14 sm:w-16 sm:h-16 md:w-20 md:h-20",
+                    isSelected
+                      ? "bg-white/10 border-white/50 ring-2 ring-white/60 shadow-[0_0_22px_rgba(255,255,255,0.35)]"
+                      : "bg-white/15 border-white/20 hover:bg-white/25 hover:scale-105",
+                  ].join(" ")}
+                >
+                  {thumb ? (
+                    <img
+                      src={thumb}
+                      alt={folder.title}
+                      className="w-full h-full object-cover pointer-events-none"
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-slate-200/30 text-[11px] text-slate-200">
+                      📁
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* label (no selection background; keep transparent) */}
-            <p
-              className={[
-                "mt-1 pr-3 leading-tight drop-shadow",
-                "text-[10px] sm:text-[11px] md:text-[12px]",
-                "text-white/90",
-                "selection:bg-transparent selection:text-inherit", // transparent text selection
-              ].join(" ")}
-            >
-              {folder.title}
-            </p>
-          </div>
-        );
-      })}
+                <p
+                  className={[
+                    "mt-1 pr-3 leading-tight drop-shadow",
+                    "text-[10px] sm:text-[11px] md:text-[12px]",
+                    "text-white/90",
+                    "selection:bg-transparent selection:text-inherit",
+                  ].join(" ")}
+                >
+                  {folder.title}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Windows */}
       {deskFolders.map((folder, index) => {
