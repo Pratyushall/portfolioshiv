@@ -13,70 +13,102 @@ export default function MusicPlayer({
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [position, setPosition] = useState({ x: 100, y: 100 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+
+  // pointer-drag state
+  const draggingRef = useRef(false);
+  const offsetRef = useRef({ x: 0, y: 0 });
   const playerRef = useRef<HTMLDivElement>(null);
 
-  // path to your mp3 (put it in /public/audio/...)
+  // path to your mp3 (put it in /public/audio/…)
   const src = "/audio/pranav-theme.mp3";
 
-  // try to autoplay when the player opens
+  // autoplay when opened
   useEffect(() => {
-    if (audioRef.current) {
-      // make sure src is set
-      if (audioRef.current.src.endsWith(src) === false) {
-        audioRef.current.src = src;
-      }
-      audioRef.current.loop = true;
-      audioRef.current.muted = false;
-
-      audioRef.current
-        .play()
-        .then(() => {
-          setIsPlaying(true);
-        })
-        .catch(() => {
-          // browser blocked autoplay — show as paused
-          setIsPlaying(false);
-        });
+    if (!audioRef.current) return;
+    if (!audioRef.current.src.endsWith(src)) {
+      audioRef.current.src = src;
     }
-  }, [audioRef, src]);
+    audioRef.current.loop = true;
+    audioRef.current.muted = false;
+    audioRef.current
+      .play()
+      .then(() => setIsPlaying(true))
+      .catch(() => setIsPlaying(false));
+  }, [audioRef]);
 
+  // pointer handlers (mouse + touch + pen)
   useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (isDragging) {
-        setPosition({
-          x: e.clientX - dragStart.x,
-          y: e.clientY - dragStart.y,
-        });
-      }
-    };
+    const el = playerRef.current;
+    if (!el) return;
 
-    const handleMouseUp = () => {
-      setIsDragging(false);
-    };
+    const onPointerDown = (e: PointerEvent) => {
+      // ignore right/middle clicks
+      if (e.button && e.button !== 0) return;
 
-    if (isDragging) {
-      document.addEventListener("mousemove", handleMouseMove);
-      document.addEventListener("mouseup", handleMouseUp);
-    }
+      // don’t start drag when clicking interactive controls inside
+      const target = e.target as HTMLElement;
+      if (target.closest("button, a, svg, input, textarea")) return;
 
-    return () => {
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDragging, dragStart]);
+      // capture pointer so we keep getting move events
+      el.setPointerCapture(e.pointerId);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (playerRef.current) {
-      const rect = playerRef.current.getBoundingClientRect();
-      setDragStart({
+      draggingRef.current = true;
+      const rect = el.getBoundingClientRect();
+      offsetRef.current = {
         x: e.clientX - rect.left,
         y: e.clientY - rect.top,
-      });
-      setIsDragging(true);
-    }
-  };
+      };
+
+      // prevent scroll on touch while dragging
+      if (e.pointerType === "touch") {
+        e.preventDefault();
+      }
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!draggingRef.current) return;
+
+      // prevent page from panning on touch
+      if (e.pointerType === "touch") {
+        e.preventDefault();
+      }
+
+      const nextX = e.clientX - offsetRef.current.x;
+      const nextY = e.clientY - offsetRef.current.y;
+
+      // optional: keep inside viewport
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const rect = el.getBoundingClientRect();
+      const clampedX = Math.min(Math.max(nextX, 0), vw - rect.width);
+      const clampedY = Math.min(Math.max(nextY, 0), vh - rect.height);
+
+      setPosition({ x: clampedX, y: clampedY });
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!draggingRef.current) return;
+      draggingRef.current = false;
+      try {
+        el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* noop */
+      }
+    };
+
+    // Use non-passive so we can preventDefault on touch
+    el.addEventListener("pointerdown", onPointerDown, { passive: false });
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerUp, { passive: false });
+    window.addEventListener("pointercancel", onPointerUp, { passive: false });
+
+    return () => {
+      el.removeEventListener("pointerdown", onPointerDown as any);
+      window.removeEventListener("pointermove", onPointerMove as any);
+      window.removeEventListener("pointerup", onPointerUp as any);
+      window.removeEventListener("pointercancel", onPointerUp as any);
+    };
+  }, []);
 
   const handlePlayPause = () => {
     if (!audioRef.current) return;
@@ -101,20 +133,22 @@ export default function MusicPlayer({
   return (
     <div
       ref={playerRef}
-      className="fixed cursor-move select-none"
+      className="fixed select-none touch-none cursor-grab active:cursor-grabbing"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,
         zIndex: 999,
+        WebkitTapHighlightColor: "transparent",
       }}
-      onMouseDown={handleMouseDown}
+      role="dialog"
+      aria-label="Music player"
     >
-      <div className="relative w-48 bg-gradient-to-b from-stone-600 via-stone-700 to-stone-600 rounded-xl shadow-2xl border-2 border-stone-800 p-3">
-        {/* Top decorative stripe */}
-        <div className="absolute top-0 left-0 right-0 h-5 bg-gradient-to-b from-stone-700 to-stone-800 rounded-t-xl border-b border-stone-900 flex items-center justify-between px-2">
+      <div className="relative w-48 bg-linear-to-b from-stone-600 via-stone-700 to-stone-600 rounded-xl shadow-2xl border-2 border-stone-800 p-3">
+        {/* Top bar */}
+        <div className="absolute top-0 left-0 right-0 h-5 bg-linear-to-b from-stone-700 to-stone-800 rounded-t-xl border-b border-stone-900 flex items-center justify-between px-2">
           <div className="flex gap-1">
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-800 shadow-inner"></div>
-            <div className="w-1.5 h-1.5 rounded-full bg-amber-900 shadow-inner"></div>
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-800 shadow-inner" />
+            <div className="w-1.5 h-1.5 rounded-full bg-amber-900 shadow-inner" />
           </div>
           <button
             onClick={(e) => {
@@ -122,13 +156,12 @@ export default function MusicPlayer({
               onClose();
             }}
             className="w-4 h-4 rounded-sm bg-stone-800 hover:bg-stone-900 flex items-center justify-center text-stone-400 text-[10px] font-bold shadow-md transition-colors cursor-pointer"
-            onMouseDown={(e) => e.stopPropagation()}
           >
             ✕
           </button>
         </div>
 
-        {/* Brand name */}
+        {/* Brand */}
         <div className="mt-3 mb-2 text-center">
           <h2 className="text-[9px] font-bold text-stone-300 tracking-widest">
             RETRO SOUNDS
@@ -138,26 +171,25 @@ export default function MusicPlayer({
           </p>
         </div>
 
-        {/* CD Display window */}
+        {/* CD window */}
         <div className="relative bg-stone-950 rounded-lg p-2 mb-2 shadow-inner border border-stone-800">
-          <div className="absolute inset-0 bg-gradient-to-br from-stone-900/50 to-transparent rounded-lg pointer-events-none"></div>
+          <div className="absolute inset-0 bg-linear-to-br from-stone-900/50 to-transparent rounded-lg pointer-events-none" />
 
-          {/* Spinning CD effect */}
-          <div className="relative mx-auto w-16 h-16 rounded-full bg-gradient-to-br from-amber-900 via-amber-800 to-stone-700 shadow-lg flex items-center justify-center">
+          <div className="relative mx-auto w-16 h-16 rounded-full bg-linear-to-br from-amber-900 via-amber-800 to-stone-700 shadow-lg flex items-center justify-center">
             <div
               className={`absolute inset-0 rounded-full ${
                 isPlaying ? "animate-spin" : ""
               }`}
               style={{ animationDuration: "3s" }}
             >
-              <div className="absolute inset-2 rounded-full bg-gradient-to-br from-stone-900 via-stone-800 to-stone-700 shadow-inner"></div>
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-stone-950 shadow-xl"></div>
+              <div className="absolute inset-2 rounded-full bg-linear-to-br from-stone-900 via-stone-800 to-stone-700 shadow-inner" />
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-stone-950 shadow-xl" />
             </div>
-            <div className="absolute inset-4 rounded-full bg-gradient-to-br from-stone-900 via-stone-800 to-stone-700 shadow-inner z-10"></div>
-            <div className="absolute w-4 h-4 rounded-full bg-stone-950 shadow-xl z-20"></div>
+            <div className="absolute inset-4 rounded-full bg-linear-to-br from-stone-900 via-stone-800 to-stone-700 shadow-inner z-10" />
+            <div className="absolute w-4 h-4 rounded-full bg-stone-950 shadow-xl z-20" />
           </div>
 
-          {/* LED Display */}
+          {/* LED */}
           <div className="mt-2 bg-stone-950 rounded px-1.5 py-0.5 text-center border border-stone-900">
             <p className="text-amber-700 text-[9px] font-mono tracking-wider">
               {isPlaying ? "► PLAYING" : "❚❚ PAUSED"}
@@ -165,15 +197,14 @@ export default function MusicPlayer({
           </div>
         </div>
 
-        {/* Control buttons */}
+        {/* Controls */}
         <div className="flex items-center justify-center gap-2 mb-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
               handlePlayPause();
             }}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="w-9 h-9 rounded-full bg-gradient-to-b from-stone-600 via-stone-700 to-stone-600 shadow-lg border border-stone-800 flex items-center justify-center hover:from-stone-500 hover:via-stone-600 hover:to-stone-500 transition-all active:shadow-inner cursor-pointer"
+            className="w-9 h-9 rounded-full bg-linear-to-b from-stone-600 via-stone-700 to-stone-600 shadow-lg border border-stone-800 flex items-center justify-center hover:from-stone-500 hover:via-stone-600 hover:to-stone-500 transition-all active:shadow-inner"
           >
             {isPlaying ? (
               <svg
@@ -199,8 +230,7 @@ export default function MusicPlayer({
               e.stopPropagation();
               handleMute();
             }}
-            onMouseDown={(e) => e.stopPropagation()}
-            className="w-8 h-8 rounded-full bg-gradient-to-b from-stone-600 via-stone-700 to-stone-600 shadow-lg border border-stone-800 flex items-center justify-center hover:from-stone-500 hover:via-stone-600 hover:to-stone-500 transition-all active:shadow-inner cursor-pointer"
+            className="w-8 h-8 rounded-full bg-linear-to-b from-stone-600 via-stone-700 to-stone-600 shadow-lg border border-stone-800 flex items-center justify-center hover:from-stone-500 hover:via-stone-600 hover:to-stone-500 transition-all active:shadow-inner"
           >
             {isMuted ? (
               <svg
@@ -225,13 +255,10 @@ export default function MusicPlayer({
         {/* hidden audio element */}
         <audio ref={audioRef} src={src} />
 
-        {/* Bottom speaker grille */}
+        {/* grille */}
         <div className="flex justify-center gap-1 opacity-50">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div
-              key={i}
-              className="w-0.5 h-0.5 rounded-full bg-stone-500"
-            ></div>
+            <div key={i} className="w-0.5 h-0.5 rounded-full bg-stone-500" />
           ))}
         </div>
       </div>
