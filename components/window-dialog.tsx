@@ -1,4 +1,3 @@
-// components/window-dialog.tsx
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
@@ -22,12 +21,14 @@ export default function WindowDialog({
   const [size, setSize] = useState({ width: 480, height: 360 });
   const [isMax, setIsMax] = useState(false);
 
-  // dragging window
-  const isDraggingRef = useRef(false);
-  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  // dragging / resizing
+  const winRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const resizeRef = useRef<HTMLDivElement>(null);
 
-  // resizing window
-  const isResizingRef = useRef(false);
+  const draggingRef = useRef(false);
+  const dragOffsetRef = useRef({ x: 0, y: 0 });
+  const resizingRef = useRef(false);
   const resizeStartRef = useRef({ x: 0, y: 0, w: 0, h: 0 });
 
   // remember last state for restore
@@ -38,68 +39,105 @@ export default function WindowDialog({
     height: 360,
   });
 
-  // global mouse move/up
+  // Pointer listeners (drag/resize) – one path for mouse + touch
   useEffect(() => {
-    const handleMove = (e: MouseEvent) => {
-      // resize first
-      if (isResizingRef.current && !isMax) {
+    const header = headerRef.current;
+    const resizer = resizeRef.current;
+    const win = winRef.current;
+    if (!header || !win) return;
+
+    // DRAG
+    const onHeaderPointerDown = (e: PointerEvent) => {
+      if (isMax) return;
+      // don’t start drag if pressing on a button inside header
+      const tgt = e.target as HTMLElement;
+      if (tgt.closest("button")) return;
+
+      draggingRef.current = true;
+      (header as any).setPointerCapture?.(e.pointerId);
+
+      dragOffsetRef.current = { x: e.clientX - pos.x, y: e.clientY - pos.y };
+      // prevent browser scroll while dragging on touch
+      if (e.pointerType === "touch") e.preventDefault();
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      // RESIZE takes priority
+      if (resizingRef.current && !isMax) {
+        if (e.pointerType === "touch") e.preventDefault();
         const { x, y, w, h } = resizeStartRef.current;
-        const newW = Math.max(360, w + (e.clientX - x));
-        const newH = Math.max(240, h + (e.clientY - y));
+        const newW = Math.max(320, w + (e.clientX - x));
+        const newH = Math.max(220, h + (e.clientY - y));
         setSize({ width: newW, height: newH });
         return;
       }
 
-      // drag
-      if (!isDraggingRef.current || isMax) return;
+      // DRAG
+      if (!draggingRef.current || isMax) return;
+      if (e.pointerType === "touch") e.preventDefault();
 
       const nextX = e.clientX - dragOffsetRef.current.x;
       const nextY = e.clientY - dragOffsetRef.current.y;
 
+      // clamp inside viewport
+      const maxX = window.innerWidth - size.width;
+      const maxY = window.innerHeight - size.height;
       setPos({
-        x: Math.max(nextX, 0),
-        y: Math.max(nextY, 0),
+        x: Math.min(Math.max(nextX, 0), Math.max(0, maxX)),
+        y: Math.min(Math.max(nextY, 0), Math.max(0, maxY)),
       });
     };
 
-    const handleUp = () => {
-      isDraggingRef.current = false;
-      isResizingRef.current = false;
+    const onPointerUp = (e: PointerEvent) => {
+      if (draggingRef.current) {
+        draggingRef.current = false;
+        try {
+          (header as any).releasePointerCapture?.(e.pointerId);
+        } catch {}
+      }
+      if (resizingRef.current) {
+        resizingRef.current = false;
+        try {
+          (resizer as any)?.releasePointerCapture?.(e.pointerId);
+        } catch {}
+      }
     };
 
-    window.addEventListener("mousemove", handleMove);
-    window.addEventListener("mouseup", handleUp);
+    header.addEventListener("pointerdown", onHeaderPointerDown, {
+      passive: false,
+    });
+    window.addEventListener("pointermove", onPointerMove, { passive: false });
+    window.addEventListener("pointerup", onPointerUp, { passive: false });
+    window.addEventListener("pointercancel", onPointerUp, { passive: false });
+
+    // RESIZE
+    const onResizerPointerDown = (e: PointerEvent) => {
+      if (isMax) return;
+      e.stopPropagation();
+      resizingRef.current = true;
+      (resizer as any)?.setPointerCapture?.(e.pointerId);
+      resizeStartRef.current = {
+        x: e.clientX,
+        y: e.clientY,
+        w: size.width,
+        h: size.height,
+      };
+      if (e.pointerType === "touch") e.preventDefault();
+    };
+
+    resizer?.addEventListener("pointerdown", onResizerPointerDown, {
+      passive: false,
+    });
 
     return () => {
-      window.removeEventListener("mousemove", handleMove);
-      window.removeEventListener("mouseup", handleUp);
+      header.removeEventListener("pointerdown", onHeaderPointerDown as any);
+      window.removeEventListener("pointermove", onPointerMove as any);
+      window.removeEventListener("pointerup", onPointerUp as any);
+      window.removeEventListener("pointercancel", onPointerUp as any);
+      resizer?.removeEventListener("pointerdown", onResizerPointerDown as any);
     };
-  }, [isMax]);
+  }, [pos.x, pos.y, size.width, size.height, isMax]);
 
-  // start drag
-  const startDrag = (e: React.MouseEvent) => {
-    if (isMax) return;
-    isDraggingRef.current = true;
-    dragOffsetRef.current = {
-      x: e.clientX - pos.x,
-      y: e.clientY - pos.y,
-    };
-  };
-
-  // start resize
-  const startResize = (e: React.MouseEvent) => {
-    if (isMax) return;
-    e.stopPropagation();
-    isResizingRef.current = true;
-    resizeStartRef.current = {
-      x: e.clientX,
-      y: e.clientY,
-      w: size.width,
-      h: size.height,
-    };
-  };
-
-  // toggle max
   const toggleMax = () => {
     if (!isMax) {
       // save
@@ -110,10 +148,7 @@ export default function WindowDialog({
         height: size.height,
       };
       setPos({ x: 0, y: 0 });
-      setSize({
-        width: window.innerWidth,
-        height: window.innerHeight - 48,
-      });
+      setSize({ width: window.innerWidth, height: window.innerHeight - 48 });
       setIsMax(true);
     } else {
       setPos({ x: lastStateRef.current.x, y: lastStateRef.current.y });
@@ -132,6 +167,7 @@ export default function WindowDialog({
 
   return (
     <div
+      ref={winRef}
       className="fixed bg-[#f7f8fa] rounded-md shadow-xl border border-slate-200 flex flex-col"
       style={{
         top: pos.y,
@@ -141,10 +177,11 @@ export default function WindowDialog({
         zIndex,
       }}
     >
-      {/* title bar */}
+      {/* title bar (touch-action: none to enable drag on mobile) */}
       <div
+        ref={headerRef}
         className="flex items-center justify-between px-3 py-2 bg-[#e5e8ef] border-b border-slate-200 cursor-move select-none"
-        onMouseDown={startDrag}
+        style={{ touchAction: "none" }}
       >
         <div className="flex items-center gap-1">
           <button
@@ -189,11 +226,12 @@ export default function WindowDialog({
           <EmptyPanel />
         )}
 
-        {/* resize handle */}
+        {/* resize handle (pointer-enabled) */}
         {!isMax && (
           <div
-            onMouseDown={startResize}
+            ref={resizeRef}
             className="absolute bottom-1 right-1 w-4 h-4 cursor-se-resize bg-slate-300/70 rounded-sm"
+            style={{ touchAction: "none" }}
           />
         )}
       </div>
@@ -214,7 +252,6 @@ function VideoPanel({ src }: { src: string }) {
   );
 }
 
-// your special about-me styling
 function TextPanel({ text }: { text: string }) {
   return (
     <div
@@ -224,14 +261,12 @@ function TextPanel({ text }: { text: string }) {
       <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-6">
         SHIVA PRANAV
       </h1>
-
       <p className="text-white/95 text-xl md:text-2xl leading-relaxed max-w-3xl mb-5">
         I’m <span className="font-semibold text-white">Shiva Pranav</span>, an
         actor who{" "}
         <span className="font-semibold">found his way back to life</span>{" "}
         through theatre.
       </p>
-
       <p className="text-white/90 text-lg md:text-xl leading-relaxed max-w-3xl mb-4">
         When everything felt a little <span className="italic">dim</span>, the
         stage showed up like{" "}
@@ -239,13 +274,11 @@ function TextPanel({ text }: { text: string }) {
         remember deciding, during one ordinary sunset{" "}
         <span className="font-semibold">“this is what I’m going to do.”</span>
       </p>
-
       <p className="text-white/85 text-lg md:text-xl leading-relaxed max-w-3xl mb-6">
         Since then, the actor in me{" "}
         <span className="font-semibold">hasn’t gone quiet,</span> and{" "}
         <span className="font-semibold">it won’t.</span>
       </p>
-
       <p className="text-white text-xl md:text-2xl leading-relaxed max-w-3xl mb-4">
         I love <span className="font-semibold">becoming someone else</span> not
         for show, but to see{" "}
@@ -253,13 +286,11 @@ function TextPanel({ text }: { text: string }) {
           how deeply I can blend into a character.
         </span>
       </p>
-
       <p className="text-white/90 text-lg md:text-xl leading-relaxed max-w-3xl mb-4">
         Big role, small role{" "}
         <span className="font-semibold">it doesn’t matter.</span> What matters
         is: did I disappear into it?
       </p>
-
       <p className="text-white/80 text-base md:text-lg leading-relaxed max-w-2xl mb-6">
         I genuinely believe{" "}
         <span className="font-semibold">
@@ -267,7 +298,6 @@ function TextPanel({ text }: { text: string }) {
         </span>{" "}
         Give me a room, a camera, a stage — I’ll show you.
       </p>
-
       <p className="text-white/70 text-base md:text-lg tracking-tight">
         You’ll know the rest when we work together{" "}
         <span className="inline-block">😉</span>
@@ -284,23 +314,14 @@ function EmptyPanel() {
   );
 }
 
-/**
- * Manual slideshow:
- * - no autoplay
- * - full image (contain)
- * - arrows
- * - counter
- */
 function ManualSlideshow({ images }: { images: string[] }) {
   const [current, setCurrent] = useState(0);
   const total = images.length;
-
   const goNext = () => setCurrent((c) => (c + 1) % total);
   const goPrev = () => setCurrent((c) => (c - 1 + total) % total);
 
   return (
     <div className="h-full w-full relative bg-white flex items-center justify-center">
-      {/* image */}
       {images.map((img, idx) => (
         <img
           key={idx}
@@ -312,7 +333,6 @@ function ManualSlideshow({ images }: { images: string[] }) {
         />
       ))}
 
-      {/* arrows */}
       {total > 1 && (
         <>
           <button
