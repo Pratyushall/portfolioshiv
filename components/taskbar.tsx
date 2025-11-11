@@ -1,115 +1,98 @@
 "use client";
 
-import React from "react";
+import { MessageCircle, Music, Instagram } from "lucide-react";
+import { useState } from "react";
+
+type TaskbarProps = {
+  minimizedWindows: string[];
+  onRestoreWindow: (id: string) => void;
+  onOpenWhatsapp: () => void;
+  onToggleMusic: () => void;
+  onStartClick: () => void; // Added prop for Start button click
+};
 
 export default function Taskbar({
   minimizedWindows,
   onRestoreWindow,
   onOpenWhatsapp,
   onToggleMusic,
-}: {
-  minimizedWindows: string[];
-  onRestoreWindow: (id: string) => void;
-  onOpenWhatsapp: () => void;
-  onToggleMusic: () => void;
-}) {
+  onStartClick,
+}: TaskbarProps) {
+  const [showInstagramTooltip, setShowInstagramTooltip] = useState(false);
+
   return (
-    <div
-      className="absolute bottom-3 left-3 right-3 h-12
-      bg-white/10 backdrop-blur-md
-      border border-white/20
-      rounded-xl
-      flex items-center px-4
-      shadow-[0_10px_35px_rgba(0,0,0,0.25)]
-      "
-    >
-      {/* center apps */}
-      <div className="flex-1 flex items-center justify-center gap-3">
-        {/* YouTube Music */}
+    <div className="absolute bottom-0 left-0 right-0 h-14 bg-gradient-to-b from-stone-600 to-stone-700 border-t-4 border-stone-400 flex items-center px-3 gap-2 z-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.2)]">
+      {/* Start button - vintage computer style */}
+      <button
+        onClick={onStartClick}
+        className="h-10 px-4 bg-gradient-to-b from-stone-500 to-stone-600 hover:from-stone-400 hover:to-stone-500 border-2 border-stone-800 shadow-[inset_-1px_-1px_0_rgba(0,0,0,0.3),inset_1px_1px_0_rgba(255,255,255,0.3)] active:shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] text-stone-100 font-bold text-base tracking-wide uppercase flex items-center gap-2 transition"
+      >
+        <div className="w-4 h-4 bg-amber-600 border-2 border-amber-800 rounded-sm shadow-inner" />
+        Start
+      </button>
+
+      {/* Separator */}
+      <div className="h-10 w-0.5 bg-stone-800 shadow-sm" />
+
+      {/* Minimized windows - retro style */}
+      {minimizedWindows.map((windowId) => (
         <button
-          onClick={onToggleMusic}
-          className="w-8 h-8 rounded-md bg-white/80 shadow-sm border border-white/20 flex items-center justify-center"
-          title="YT Music"
+          key={windowId}
+          onClick={() => onRestoreWindow(windowId)}
+          className="h-10 px-5 bg-gradient-to-b from-stone-500 to-stone-600 hover:from-stone-400 hover:to-stone-500 border-2 border-stone-800 shadow-[inset_-1px_-1px_0_rgba(0,0,0,0.3),inset_1px_1px_0_rgba(255,255,255,0.3)] active:shadow-[inset_1px_1px_3px_rgba(0,0,0,0.5)] text-stone-100 text-sm font-bold uppercase tracking-wide transition max-w-[200px] truncate"
         >
-          <div className="w-5 h-5 rounded-full bg-[#FF0000] flex items-center justify-center">
-            <div className="w-2 h-2 border-l-[6px] border-l-white border-y-4 border-y-transparent translate-x-px" />
-          </div>
+          📁 {windowId}
         </button>
+      ))}
 
-        {/* Netflix */}
-        <div
-          className="w-8 h-8 rounded-md bg-black/85 shadow-sm flex items-center justify-center"
-          title="Netflix"
-        >
-          <span className="text-[#e50914] text-[11px] font-bold leading-none">
-            N
-          </span>
-        </div>
-
-        {/* Prime Video */}
-        <div
-          className="w-8 h-8 rounded-md bg-white/80 shadow-sm border border-white/20 flex items-center justify-center"
-          title="Prime Video"
-        >
-          <span className="text-sky-500 text-[10px] font-semibold leading-none">
-            prime
-          </span>
-        </div>
-
-        {/* WhatsApp + text */}
+      {/* System tray - right side */}
+      <div className="ml-auto flex items-center gap-2 h-10 px-3 bg-gradient-to-b from-stone-600 to-stone-700 border-2 border-stone-800 shadow-[inset_1px_1px_0_rgba(0,0,0,0.3),inset_-1px_-1px_0_rgba(255,255,255,0.1)]">
+        {/* WhatsApp button - retro icon style */}
         <button
           onClick={onOpenWhatsapp}
-          className="flex items-center gap-1 bg-[#22c55e] text-white rounded-md px-2 h-8 shadow-sm"
-          title="WhatsApp"
+          className="w-9 h-9 bg-gradient-to-b from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 border-2 border-green-900 shadow-[inset_-1px_-1px_0_rgba(0,0,0,0.4),inset_1px_1px_0_rgba(255,255,255,0.2)] active:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)] flex items-center justify-center transition"
+          aria-label="WhatsApp"
+          title="WHATSAPP"
         >
-          <svg viewBox="0 0 32 32" className="w-4 h-4" fill="currentColor">
-            <path d="M16 3C9.4 3 4 8.1 4 14.4c0 2.7 1.1 5.1 3 7.1L5.5 27 10 25.6c1.8 1 3.8 1.5 6 1.5 6.6 0 12-5.1 12-11.4C28 8.1 22.6 3 16 3z" />
-          </svg>
-          <span className="text-[10px] font-medium leading-none">
-            contact me
-          </span>
+          <MessageCircle className="w-6 h-6 text-white stroke-[2.5]" />
         </button>
 
-        {/* minimized windows */}
-        {minimizedWindows.length > 0 && (
-          <div className="flex items-center gap-2 ml-3">
-            {minimizedWindows.map((id) => (
-              <button
-                key={id}
-                onClick={() => onRestoreWindow(id)}
-                className="px-3 py-1 bg-white/70 rounded-sm text-xs shadow-sm border border-white/30 text-slate-800"
-              >
-                {id}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+        {/* Separator */}
+        <div className="h-8 w-0.5 bg-stone-900 shadow-sm" />
 
-      {/* Instagram CTA on the extreme right */}
-      <a
-        href="https://www.instagram.com/usernamepranav/"
-        target="_blank"
-        rel="noreferrer"
-        className="ml-auto flex items-center gap-2 text-[11px] text-white/90 hover:text-white transition"
-      >
-        <span className="w-7 h-7 rounded-lg bg-linear-to-br from-[#f58529] via-[#dd2a7b] to-[#8134af] flex items-center justify-center text-white shadow-sm">
-          <svg
-            viewBox="0 0 24 24"
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        {/* Music button - retro icon style */}
+        <button
+          onClick={onToggleMusic}
+          className="w-9 h-9 bg-gradient-to-b from-amber-700 to-amber-800 hover:from-amber-600 hover:to-amber-700 border-2 border-amber-900 shadow-[inset_-1px_-1px_0_rgba(0,0,0,0.4),inset_1px_1px_0_rgba(255,255,255,0.2)] active:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)] flex items-center justify-center transition"
+          aria-label="Music"
+          title="MUSIC PLAYER"
+        >
+          <Music className="w-6 h-6 text-white stroke-[2.5]" />
+        </button>
+
+        {/* Separator */}
+        <div className="h-8 w-0.5 bg-stone-900 shadow-sm" />
+
+        <div className="relative">
+          <button
+            onClick={() => window.open("https://instagram.com", "_blank")}
+            onMouseEnter={() => setShowInstagramTooltip(true)}
+            onMouseLeave={() => setShowInstagramTooltip(false)}
+            className="w-9 h-9 bg-gradient-to-b from-pink-600 to-pink-700 hover:from-pink-500 hover:to-pink-600 border-2 border-pink-900 shadow-[inset_-1px_-1px_0_rgba(0,0,0,0.4),inset_1px_1px_0_rgba(255,255,255,0.2)] active:shadow-[inset_1px_1px_2px_rgba(0,0,0,0.5)] flex items-center justify-center transition"
+            aria-label="Instagram"
+            title="INSTAGRAM"
           >
-            <rect x="4" y="4" width="16" height="16" rx="5" ry="5" />
-            <circle cx="12" cy="12" r="3.5" />
-            <circle cx="16" cy="8" r="0.6" fill="currentColor" stroke="none" />
-          </svg>
-        </span>
-        <span>you can definitely follow me on Instagram!</span>
-      </a>
+            <Instagram className="w-6 h-6 text-white stroke-[2.5]" />
+          </button>
+          {showInstagramTooltip && (
+            <div className="absolute bottom-full mb-2 right-0 bg-stone-800 border-2 border-stone-600 px-3 py-2 rounded shadow-lg whitespace-nowrap">
+              <p className="text-stone-100 text-xs font-bold">
+                ...you can definitely follow me on instagram..
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

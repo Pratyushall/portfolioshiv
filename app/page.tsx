@@ -1,9 +1,8 @@
-// app/page.tsx
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import HeroScreen from "@/components/hero-screen";
-import DesktopScreen from "@/components/desktop-screen"; // 👈 MUST really be desktop-screen.tsx
+import DesktopScreen from "@/components/desktop-screen";
 
 export default function Page() {
   const [screen, setScreen] = useState<"hero" | "desktop">("hero");

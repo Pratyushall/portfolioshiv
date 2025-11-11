@@ -1,5 +1,3 @@
-// lib/folders.ts
-
 export type Folder = {
   id: string;
   title: string;
@@ -16,7 +14,6 @@ export type Folder = {
   icon?: string;
 };
 
-// ONLY your 6 folders now
 export const FOLDERS: Folder[] = [
   {
     id: "bhootagaanam",
@@ -89,22 +86,20 @@ export const FOLDERS: Folder[] = [
     ],
     slideshowType: "fade",
   },
-  // 🆕 text-only folder
   {
     id: "about-me",
     title: "About Me",
     x: 520,
     y: 110,
-    text: "I’m Shiva Pranav, an actor who found his way back to life through theatre. At a time when everything felt dim, the stage was a ray of sunshine, I still remember deciding, during one ordinary sunset, that this is what I’m going to do. Since then, the actor in me hasn’t gone quiet, and it won’t. I love becoming someone else, not for show, but to see how deeply I can blend into a character; big role, small role, it doesn’t matter. I believe I have it in me to do whatever it takes. You’ll know the rest when we work together. 😉",
-    icon: "/images/about.jpg", // optional – create this in /public/icons
+    text: "I'm Shiva Pranav, an actor who found his way back to life through theatre. At a time when everything felt dim, the stage was a ray of sunshine, I still remember deciding, during one ordinary sunset, that this is what I'm going to do. Since then, the actor in me hasn't gone quiet, and it won't. I love becoming someone else, not for show, but to see how deeply I can blend into a character; big role, small role, it doesn't matter. I believe I have it in me to do whatever it takes. You'll know the rest when we work together. 😉",
+    icon: "/images/about.jpg",
   },
-  // 🆕 video folder
   {
     id: "showreel",
     title: "Showreel",
     x: 520,
     y: 220,
-    video: "/videos/showreel.mp4", // put file at public/videos/showreel.mp4
-    icon: "/images/showr.jpg", // optional
+    video: "/videos/showreel.mp4",
+    icon: "/images/showr.jpg",
   },
 ];

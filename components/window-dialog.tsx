@@ -17,50 +17,6 @@ export default function WindowDialog({
   onClose,
   onMinimize,
 }: WindowDialogProps) {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-
-  if (isMobile) {
-    return (
-      <MobileWindow
-        folder={folder}
-        onClose={onClose}
-        onMinimize={onMinimize}
-        zIndex={zIndex}
-      />
-    );
-  }
-
-  return (
-    <DesktopWindow
-      folder={folder}
-      onClose={onClose}
-      onMinimize={onMinimize}
-      zIndex={zIndex}
-    />
-  );
-}
-
-/* ------------------------------------------------------------------
-   DESKTOP WINDOW (your version, just kept)
------------------------------------------------------------------- */
-function DesktopWindow({
-  folder,
-  zIndex,
-  onClose,
-  onMinimize,
-}: {
-  folder: Folder;
-  zIndex: number;
-  onClose: () => void;
-  onMinimize: () => void;
-}) {
   // position + size
   const [pos, setPos] = useState({ x: 80, y: 60 });
   const [size, setSize] = useState({ width: 480, height: 360 });
@@ -156,7 +112,7 @@ function DesktopWindow({
       setPos({ x: 0, y: 0 });
       setSize({
         width: window.innerWidth,
-        height: window.innerHeight - 48, // leave for taskbar
+        height: window.innerHeight - 48,
       });
       setIsMax(true);
     } else {
@@ -169,7 +125,7 @@ function DesktopWindow({
     }
   };
 
-  // what does this folder have?
+  // figure out content type
   const hasVideo = !!folder.video;
   const hasText = !!folder.text;
   const hasImages = !!folder.images && folder.images.length > 0;
@@ -245,95 +201,6 @@ function DesktopWindow({
   );
 }
 
-/* ------------------------------------------------------------------
-   MOBILE WINDOW (iOS-like sheet)
------------------------------------------------------------------- */
-function MobileWindow({
-  folder,
-  onClose,
-  onMinimize,
-  zIndex,
-}: {
-  folder: Folder;
-  onClose: () => void;
-  onMinimize: () => void;
-  zIndex: number;
-}) {
-  const hasVideo = !!folder.video;
-  const hasText = !!folder.text;
-  const hasImages = !!folder.images && folder.images.length > 0;
-
-  return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/40"
-      style={{ zIndex }}
-    >
-      <div className="w-full h-[88vh] bg-white rounded-t-3xl shadow-2xl overflow-hidden flex flex-col">
-        {/* top handle + header */}
-        <div className="pt-3 pb-2 px-4 border-b border-slate-100 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-1.5 bg-slate-300 rounded-full mx-auto" />
-          </div>
-          <div className="flex-1 text-center -ml-10">
-            <p className="text-sm font-semibold text-slate-900">
-              {folder.title}
-            </p>
-            <p className="text-[10px] text-slate-400 mt-0.5">
-              {hasVideo
-                ? "Video"
-                : hasText
-                ? "Notes"
-                : hasImages
-                ? "Slideshow"
-                : "Empty"}
-            </p>
-          </div>
-          <div className="flex gap-1">
-            <button
-              onClick={onMinimize}
-              className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 text-xs"
-            >
-              _
-            </button>
-            <button
-              onClick={onClose}
-              className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 text-sm"
-            >
-              ×
-            </button>
-          </div>
-        </div>
-
-        {/* content */}
-        <div className="flex-1 overflow-hidden">
-          {hasVideo ? (
-            <div className="h-full w-full bg-black flex items-center justify-center">
-              <video
-                src={folder.video!}
-                controls
-                className="w-full h-full object-contain bg-black"
-              />
-            </div>
-          ) : hasText ? (
-            <div className="h-full overflow-auto">
-              <TextPanel text={folder.text!} />
-            </div>
-          ) : hasImages ? (
-            <div className="h-full">
-              <ManualSlideshow images={folder.images!} mobile />
-            </div>
-          ) : (
-            <EmptyPanel />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------
-   SHARED PANELS
------------------------------------------------------------------- */
 function VideoPanel({ src }: { src: string }) {
   return (
     <div className="w-full h-full bg-black flex items-center justify-center">
@@ -347,13 +214,13 @@ function VideoPanel({ src }: { src: string }) {
   );
 }
 
+// your special about-me styling
 function TextPanel({ text }: { text: string }) {
   return (
     <div
       className="w-full h-full overflow-auto p-6 md:p-10"
       style={{ backgroundColor: "#60709F" }}
     >
-      {/* you already had your formatted text here, keeping it */}
       <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white mb-6">
         SHIVA PRANAV
       </h1>
@@ -418,18 +285,13 @@ function EmptyPanel() {
 }
 
 /**
- * Manual slideshow (shared)
+ * Manual slideshow:
  * - no autoplay
+ * - full image (contain)
  * - arrows
- * - full image (object-contain)
+ * - counter
  */
-function ManualSlideshow({
-  images,
-  mobile = false,
-}: {
-  images: string[];
-  mobile?: boolean;
-}) {
+function ManualSlideshow({ images }: { images: string[] }) {
   const [current, setCurrent] = useState(0);
   const total = images.length;
 
@@ -437,11 +299,8 @@ function ManualSlideshow({
   const goPrev = () => setCurrent((c) => (c - 1 + total) % total);
 
   return (
-    <div
-      className={`h-full w-full relative bg-white flex items-center justify-center ${
-        mobile ? "bg-white" : ""
-      }`}
-    >
+    <div className="h-full w-full relative bg-white flex items-center justify-center">
+      {/* image */}
       {images.map((img, idx) => (
         <img
           key={idx}
@@ -453,6 +312,7 @@ function ManualSlideshow({
         />
       ))}
 
+      {/* arrows */}
       {total > 1 && (
         <>
           <button
